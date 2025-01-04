@@ -17,6 +17,8 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 git branch: 'main', url: 'https://github.com/Chimekinglsey/php-todo'
+                sh 'git status'
+                sh 'git log --oneline -5'
             }
         }
 
@@ -44,7 +46,7 @@ pipeline {
         stage('Prepare Dependencies') {
             steps {
                 sh '''
-                    # Function to safely create directory if it doesn't exist
+                    # Create directories and set permissions
                     create_dir_if_not_exists() {
                         if [ ! -d "$1" ]; then
                             echo "Creating directory: $1"
@@ -54,55 +56,50 @@ pipeline {
                         fi
                     }
 
-                    # Create Laravel required directories
                     create_dir_if_not_exists "bootstrap/cache"
                     create_dir_if_not_exists "storage/framework/sessions"
                     create_dir_if_not_exists "storage/framework/views"
                     create_dir_if_not_exists "storage/framework/cache"
                     
-                    # Set permissions regardless of whether directories were just created
-                    echo "Setting directory permissions..."
                     chmod -R 775 storage bootstrap/cache || true
                     chown -R jenkins:jenkins storage bootstrap/cache || true
                     
-                    # Copy environment file if it doesn't exist
                     if [ ! -f ".env" ]; then
-                        echo "Copying .env file..."
                         cp .env.sample .env
-                    else
-                        echo ".env file already exists"
                     fi
                     
-                    # Install composer if not present
                     if ! command -v composer &> /dev/null; then
-                        echo "Installing composer..."
                         curl -sS https://getcomposer.org/installer | php
                         sudo mv composer.phar /usr/local/bin/composer
-                    else
-                        echo "Composer already installed"
                     fi
                 '''
                 
-                // Run composer install with proper error handling
                 sh '''
-                    echo "Running composer install..."
                     composer install --no-interaction
-                    if [ $? -eq 0 ]; then
-                        echo "Composer install completed successfully"
+                '''
+                
+                // Test database connection before proceeding
+                sh '''
+                    echo "Testing database connection..."
+                    # Install mysql-client if not present
+                    if ! command -v mysql &> /dev/null; then
+                        sudo apt-get update
+                        sudo apt-get install -y mysql-client
+                    fi
+                    
+                    # Test MySQL connection
+                    if mysql -h 172.31.10.129 -u kings -plesson123 -e "use php_todo"; then
+                        echo "Database connection successful!"
                     else
-                        echo "Composer install failed"
+                        echo "Failed to connect to database"
                         exit 1
                     fi
                 '''
                 
-                // Run Laravel commands
                 sh '''
-                    echo "Generating application key..."
                     php artisan key:generate
-                    
                     echo "Running migrations..."
                     php artisan migrate --force
-                    
                     echo "Seeding database..."
                     php artisan db:seed --force
                 '''
