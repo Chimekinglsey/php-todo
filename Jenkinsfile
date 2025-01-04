@@ -184,38 +184,53 @@ pipeline {
         stage ('Upload Artifact to Artifactory') {
             steps {
                 script {
-                    def server = Artifactory.server 'artifactory-server'
-                    def buildInfo = Artifactory.newBuildInfo()
-                    buildInfo.name = 'php-todo'
-                    
-                    // Get the build number from Jenkins
-                    def buildNumber = env.BUILD_NUMBER
-                    
-                    // Create upload spec with correct JSON format for props
-                    def uploadSpec = """{
-                        "files": [
-                            {
-                                "pattern": "artifacts/php-todo.zip",
-                                "target": "generic-local/php-todo/${buildNumber}/",
-                                "props": "build.name=php-todo;build.number=${buildNumber};type=zip;status=ready"
-                            }
-                        ]
-                    }"""
+                    try {
+                        def server = Artifactory.server 'artifactory-server'
+                        def buildInfo = Artifactory.newBuildInfo()
+                        buildInfo.name = 'php-todo'
+                        
+                        // Get the build number from Jenkins
+                        def buildNumber = env.BUILD_NUMBER
+                        
+                        // Create upload spec with simplified path
+                        def uploadSpec = """{
+                            "files": [
+                                {
+                                    "pattern": "artifacts/php-todo.zip",
+                                    "target": "generic-local/php-todo/${buildNumber}/",
+                                    "props": "build.name=php-todo;build.number=${buildNumber};type=zip;status=ready",
+                                    "flat": true
+                                }
+                            ]
+                        }"""
 
-                    // Upload to Artifactory
-                    server.upload spec: uploadSpec
-                    server.publishBuildInfo buildInfo
+                        // Test Artifactory connection first
+                        server.ping()
+
+                        // Upload to Artifactory with retry mechanism
+                        retry(3) {
+                            server.upload spec: uploadSpec
+                        }
+                        
+                        server.publishBuildInfo buildInfo
+                    } catch (Exception e) {
+                        echo "Failed to upload to Artifactory: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                        // Continue with deployment even if upload fails
+                    }
                 }
             }
         }
 
         stage ('Deploy to Dev Environment') {
             steps {
-                    build job: 'ansible-project-demo/main', 
+                build(
+                    job: 'ansible-project-demo/main',
                     parameters: [string(name: 'env', value: 'dev')],
-                    propagate: false, 
+                    propagate: false,
                     wait: true
-                }
+                )
+            }
         }
     }
 
