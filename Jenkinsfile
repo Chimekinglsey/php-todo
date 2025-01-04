@@ -135,28 +135,83 @@ pipeline {
             }
         }
 
-        stage('Plot PHPLoc Metrics') {
+        stage('Plot Metrics') {
             steps {
-                // Archive the CSV file for plotting
-                archiveArtifacts artifacts: 'build/logs/phploc.csv', onlyIfSuccessful: true
-
-                // Use the plot plugin to generate the plot
-                plot csvFileName: 'build/logs/phploc.csv',
-                     title: 'PHPLoc Metrics',
-                     yaxis: 'Metrics',
-                     group: 'Code Analysis',
-                     style: 'line',
-                     csvSeries: [[
-                         file: 'build/logs/phploc.csv',
-                         label: 'PHPLoc Results'
-                     ]]
+                plot(
+                    csvFileName: 'build/logs/phploc.csv',
+                    title: 'PHPLoc Metrics',
+                    yaxis: 'Metrics',
+                    group: 'Code Analysis',
+                    style: 'line',
+                    csvSeries: [
+                        [
+                            file: 'build/logs/phploc.csv',
+                            displayTableFlag: false,
+                            inclusionFlag: 'OFF',
+                            exclusionValues: '',
+                            label: 'PHPLoc Results',
+                            url: ''
+                        ]
+                    ]
+                )
+            }
+        }        
+        
+        stage ('Package Artifact') {
+            steps {
+                script {
+                    // Create artifacts directory if it doesn't exist (with -p flag)
+                    sh 'mkdir -p artifacts || true'
+                    
+                    // Remove existing archive if present
+                    sh 'rm -f artifacts/php-todo.zip || true'
+                    
+                    // Package the application, excluding unnecessary files
+                    sh '''
+                        zip -r artifacts/php-todo.zip . \
+                        -x "*.git*" \
+                        -x "**/node_modules/**" \
+                        -x "**/vendor/**" \
+                        -x "*.zip" \
+                        -x "**/storage/logs/*" \
+                        -x "**/storage/framework/cache/*" \
+                        -x "**/storage/framework/sessions/*"
+                    '''
+                }
             }
         }
-        // stage ('Package Artifact') {
-        //     steps {
-        //             sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
-        //     }
-        // }
+
+        stage ('Upload Artifact to Artifactory') {
+            steps {
+                script {
+                    def server = Artifactory.server 'artifactory-server'
+                    def buildInfo = Artifactory.newBuildInfo()
+                    buildInfo.name = 'php-todo'
+                    
+                    // Get the build number from Jenkins
+                    def buildNumber = env.BUILD_NUMBER
+                    
+                    // Create upload spec
+                    def uploadSpec = """{
+                        "files": [{
+                            "pattern": "artifacts/php-todo.zip",
+                            "target": "generic-local/php-todo/${buildNumber}/",
+                            "props": {
+                                "build.name": "php-todo",
+                                "build.number": "${buildNumber}",
+                                "build.timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")}",
+                                "type": "zip",
+                                "status": "ready"
+                            }
+                        }]
+                    }"""
+
+                    // Upload to Artifactory
+                    def buildUpload = server.upload spec: uploadSpec, buildInfo: buildInfo
+                    server.publishBuildInfo buildInfo
+                }
+            }
+        }
     }
 
     post {
