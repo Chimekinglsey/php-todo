@@ -204,9 +204,6 @@ pipeline {
                             ]
                         }"""
 
-                        // Test Artifactory connection first
-                        server.ping()
-
                         // Upload to Artifactory with retry mechanism
                         retry(3) {
                             server.upload spec: uploadSpec
@@ -225,7 +222,7 @@ pipeline {
         stage ('Deploy to Dev Environment') {
             steps {
                 build(
-                    job: 'ansible-project-demo/main',
+                    job: 'ansible-project-demo',
                     parameters: [string(name: 'env', value: 'dev')],
                     propagate: false,
                     wait: true
