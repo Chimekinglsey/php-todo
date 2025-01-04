@@ -134,6 +134,29 @@ pipeline {
                 sh './vendor/bin/phploc app/ --log-csv build/logs/phploc.csv'
             }
         }
+
+        stage('Plot PHPLoc Metrics') {
+            steps {
+                // Archive the CSV file for plotting
+                archiveArtifacts artifacts: 'build/logs/phploc.csv', onlyIfSuccessful: true
+
+                // Use the plot plugin to generate the plot
+                plot csvFileName: 'build/logs/phploc.csv',
+                     title: 'PHPLoc Metrics',
+                     yaxis: 'Metrics',
+                     group: 'Code Analysis',
+                     series: [[
+                         file: 'build/logs/phploc.csv',
+                         label: 'PHPLoc Results'
+                     ]]
+            }
+        }
+
+        // stage ('Package Artifact') {
+        //     steps {
+        //             sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
+        //     }
+        // }
     }
 
     post {
