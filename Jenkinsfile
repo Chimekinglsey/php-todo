@@ -191,26 +191,31 @@ pipeline {
                     // Get the build number from Jenkins
                     def buildNumber = env.BUILD_NUMBER
                     
-                    // Create upload spec
+                    // Create upload spec with correct JSON format for props
                     def uploadSpec = """{
-                        "files": [{
-                            "pattern": "artifacts/php-todo.zip",
-                            "target": "generic-local/php-todo/${buildNumber}/",
-                            "props": {
-                                "build.name": "php-todo",
-                                "build.number": "${buildNumber}",
-                                "build.timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")}",
-                                "type": "zip",
-                                "status": "ready"
+                        "files": [
+                            {
+                                "pattern": "artifacts/php-todo.zip",
+                                "target": "generic-local/php-todo/${buildNumber}/",
+                                "props": "build.name=php-todo;build.number=${buildNumber};type=zip;status=ready"
                             }
-                        }]
+                        ]
                     }"""
 
                     // Upload to Artifactory
-                    def buildUpload = server.upload spec: uploadSpec, buildInfo: buildInfo
+                    server.upload spec: uploadSpec
                     server.publishBuildInfo buildInfo
                 }
             }
+        }
+
+        stage ('Deploy to Dev Environment') {
+            steps {
+                    build job: 'ansible-project-demo/main', 
+                    parameters: [[$class: 'StringParameterValue', name: 'env', value: 'dev', name: ]], 
+                    propagate: false, 
+                    wait: true
+                }
         }
     }
 
