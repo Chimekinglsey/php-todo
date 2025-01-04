@@ -97,6 +97,7 @@ pipeline {
                 '''
                 
                 sh '''
+                    php artisan config:clear
                     php artisan key:generate
                     echo "Running migrations..."
                     php artisan migrate --force
