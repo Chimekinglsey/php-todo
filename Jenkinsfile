@@ -17,8 +17,6 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 git branch: 'main', url: 'https://github.com/Chimekinglsey/php-todo'
-                sh 'git status'
-                sh 'git log --oneline -5'
             }
         }
 
