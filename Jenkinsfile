@@ -115,8 +115,23 @@ pipeline {
 
         stage('Code Analysis') {
             steps {
-                    sh 'phploc app/ --log-csv build/logs/phploc.csv'
+                script {
+                    // Check if phploc is installed
+                    if (!fileExists('./vendor/bin/phploc')) {
+                        echo 'phploc not found, installing...'
+                        sh '''
+                        if [ ! -f composer.json ]; then
+                            echo "{}" > composer.json
+                        fi
+                        composer require --dev phploc/phploc:^3.0
+                        '''
+                    } else {
+                        echo 'phploc already installed.'
+                    }
+                }
 
+                // Run the phploc analysis
+                sh './vendor/bin/phploc app/ --log-csv build/logs/phploc.csv'
             }
         }
     }
