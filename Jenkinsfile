@@ -212,7 +212,7 @@ pipeline {
         stage ('Deploy to Dev Environment') {
             steps {
                     build job: 'ansible-project-demo/main', 
-                    parameters: [[$class: 'StringParameterValue', name: 'env', value: 'dev', name: ]], 
+                    parameters: [string(name: 'env', value: 'dev')],
                     propagate: false, 
                     wait: true
                 }
