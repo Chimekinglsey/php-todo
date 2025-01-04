@@ -145,13 +145,12 @@ pipeline {
                      title: 'PHPLoc Metrics',
                      yaxis: 'Metrics',
                      group: 'Code Analysis',
-                     series: [[
+                     csvSeries: [[
                          file: 'build/logs/phploc.csv',
                          label: 'PHPLoc Results'
                      ]]
             }
         }
-
         // stage ('Package Artifact') {
         //     steps {
         //             sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
