@@ -17,6 +17,8 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 git branch: 'main', url: 'https://github.com/Chimekinglsey/php-todo'
+                sh 'git status'
+                sh 'git log --oneline -5'
             }
         }
 
@@ -43,17 +45,69 @@ pipeline {
 
         stage('Prepare Dependencies') {
             steps {
-                sh 'mv .env.sample .env'
                 sh '''
+                    # Function to safely create directory if it doesn't exist
+                    create_dir_if_not_exists() {
+                        if [ ! -d "$1" ]; then
+                            echo "Creating directory: $1"
+                            mkdir -p "$1"
+                        else
+                            echo "Directory already exists: $1"
+                        fi
+                    }
+
+                    # Create Laravel required directories
+                    create_dir_if_not_exists "bootstrap/cache"
+                    create_dir_if_not_exists "storage/framework/sessions"
+                    create_dir_if_not_exists "storage/framework/views"
+                    create_dir_if_not_exists "storage/framework/cache"
+                    
+                    # Set permissions regardless of whether directories were just created
+                    echo "Setting directory permissions..."
+                    chmod -R 775 storage bootstrap/cache || true
+                    chown -R jenkins:jenkins storage bootstrap/cache || true
+                    
+                    # Copy environment file if it doesn't exist
+                    if [ ! -f ".env" ]; then
+                        echo "Copying .env file..."
+                        cp .env.sample .env
+                    else
+                        echo ".env file already exists"
+                    fi
+                    
+                    # Install composer if not present
                     if ! command -v composer &> /dev/null; then
+                        echo "Installing composer..."
                         curl -sS https://getcomposer.org/installer | php
                         sudo mv composer.phar /usr/local/bin/composer
+                    else
+                        echo "Composer already installed"
                     fi
                 '''
-                sh 'composer install'
-                sh 'php artisan migrate'
-                sh 'php artisan db:seed'
-                sh 'php artisan key:generate'
+                
+                // Run composer install with proper error handling
+                sh '''
+                    echo "Running composer install..."
+                    composer install --no-interaction
+                    if [ $? -eq 0 ]; then
+                        echo "Composer install completed successfully"
+                    else
+                        echo "Composer install failed"
+                        exit 1
+                    fi
+                '''
+                
+                // Run Laravel commands
+                sh '''
+                    echo "Generating application key..."
+                    php artisan key:generate
+                    
+                    echo "Running migrations..."
+                    php artisan migrate --force
+                    
+                    echo "Seeding database..."
+                    php artisan db:seed --force
+                '''
             }
         }
 
@@ -61,6 +115,18 @@ pipeline {
             steps {
                 sh './vendor/bin/phpunit'
             } 
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        failure {
+            echo 'Pipeline failed! Check the logs for details.'
+        }
+        success {
+            echo 'Pipeline completed successfully!'
         }
     }
 }
