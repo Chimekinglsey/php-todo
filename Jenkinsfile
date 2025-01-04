@@ -145,6 +145,7 @@ pipeline {
                      title: 'PHPLoc Metrics',
                      yaxis: 'Metrics',
                      group: 'Code Analysis',
+                     style: 'line',
                      csvSeries: [[
                          file: 'build/logs/phploc.csv',
                          label: 'PHPLoc Results'
