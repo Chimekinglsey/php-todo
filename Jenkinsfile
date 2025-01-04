@@ -143,16 +143,6 @@ pipeline {
                     yaxis: 'Metrics',
                     group: 'Code Analysis',
                     style: 'line',
-                    csvSeries: [
-                        [
-                            file: 'build/logs/phploc.csv',
-                            displayTableFlag: false,
-                            inclusionFlag: 'OFF',
-                            exclusionValues: '',
-                            label: 'PHPLoc Results',
-                            url: ''
-                        ]
-                    ]
                 )
             }
         }        
