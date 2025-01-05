@@ -213,7 +213,10 @@ pipeline {
             steps {
                 build(
                     job: 'ansible-project-demo',
-                    parameters: [string(name: 'env', value: 'dev')],
+                    parameters: [
+                        string(name: 'env', value: 'dev'),
+                        string(name: 'tags', value: '')    // Override the default
+                    ],                    
                     propagate: false,
                     wait: true
                 )
