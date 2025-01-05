@@ -135,28 +135,104 @@ pipeline {
             }
         }
 
-        stage('Plot PHPLoc Metrics') {
+        stage('Plot Metrics') {
             steps {
-                // Archive the CSV file for plotting
-                archiveArtifacts artifacts: 'build/logs/phploc.csv', onlyIfSuccessful: true
-
-                // Use the plot plugin to generate the plot
-                plot csvFileName: 'build/logs/phploc.csv',
-                     title: 'PHPLoc Metrics',
-                     yaxis: 'Metrics',
-                     group: 'Code Analysis',
-                     style: 'line',
-                     csvSeries: [[
-                         file: 'build/logs/phploc.csv',
-                         label: 'PHPLoc Results'
-                     ]]
+                plot(
+                    csvFileName: 'build/logs/phploc.csv',
+                    title: 'PHPLoc Metrics',
+                    yaxis: 'Metrics',
+                    group: 'Code Analysis',
+                    style: 'line',
+                )
+            }
+        }        
+        
+        stage ('Package Artifact') {
+            steps {
+                script {
+                    // Create artifacts directory if it doesn't exist (with -p flag)
+                    sh 'mkdir -p artifacts || true'
+                    
+                    // Remove existing archive if present
+                    sh 'rm -f artifacts/php-todo.zip || true'
+                    
+                    // Package the application, excluding unnecessary files
+                    sh '''
+                        zip -r artifacts/php-todo.zip . \
+                        -x "*.git*" \
+                        -x "**/node_modules/**" \
+                        -x "**/vendor/**" \
+                        -x "*.zip" \
+                        -x "**/storage/logs/*" \
+                        -x "**/storage/framework/cache/*" \
+                        -x "**/storage/framework/sessions/*"
+                    '''
+                }
             }
         }
-        // stage ('Package Artifact') {
-        //     steps {
-        //             sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
-        //     }
-        // }
+
+        stage ('Upload Artifact to Artifactory') {
+            steps {
+                script {
+                    try {
+                        def server = Artifactory.server 'artifactory-server'
+                        def buildInfo = Artifactory.newBuildInfo()
+                        buildInfo.name = 'php-todo'
+                        
+                        // Get the build number from Jenkins
+                        def buildNumber = env.BUILD_NUMBER
+                        
+                        // Create upload spec with simplified path
+                        def uploadSpec = """{
+                            "files": [
+                                {
+                                    "pattern": "artifacts/php-todo.zip",
+                                    "target": "generic-local/php-todo/${buildNumber}/",
+                                    "props": "build.name=php-todo;build.number=${buildNumber};type=zip;status=ready",
+                                    "flat": true
+                                }
+                            ]
+                        }"""
+
+                        // Upload to Artifactory with retry mechanism
+                        retry(3) {
+                            server.upload spec: uploadSpec
+                        }
+                        
+                        server.publishBuildInfo buildInfo
+                    } catch (Exception e) {
+                        echo "Failed to upload to Artifactory: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                        // Continue with deployment even if upload fails
+                    }
+                }
+            }
+        }
+
+        stage ('Deploy to Dev Environment') {
+            steps {
+                build(
+                    job: 'ansible-project-demo',
+                    parameters: [
+                        string(name: 'env', value: 'dev'),
+                        string(name: 'tags', value: '')    // Override the default
+                    ],                    
+                    propagate: false,
+                    wait: true
+                )
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            environment {
+                scannerHome = tool 'SonarQubeScanner'
+            }
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh "${scannerHome}/bin/sonar-scanner"
+                }
+            }
+        }
     }
 
     post {
